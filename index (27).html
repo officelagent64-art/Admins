@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniAdmin - University Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+        }
+    </script>
+    <style>
+        .nav-btn { position: relative; overflow: hidden; transition: all 0.2s ease; }
+        .nav-btn::before { content: ''; position: absolute; bottom: 0; left: 50%; width: 0; height: 2px; background: linear-gradient(90deg, #3b82f6, #06b6d4); transition: all 0.3s ease; transform: translateX(-50%); }
+        .nav-btn:hover::before { width: 80%; }
+        .nav-btn.active { background: rgba(59,130,246,0.1); color: #3b82f6; }
+        .dark .nav-btn.active { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        body { transition: background-color 0.3s ease; }
+        .upload-card { transition: all 0.3s ease; }
+        .upload-card:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -12px rgba(0,0,0,0.15); }
+        .dropzone { transition: all 0.2s; }
+        .dropzone:hover, .dropzone.dragover { border-color: #3b82f6; background: rgba(59,130,246,0.04); }
+        .cert-dropzone:hover, .cert-dropzone.dragover { border-color: #7c3aed; background: rgba(124,58,237,0.04); }
+        .toast { animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .file-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
+        .dark .file-row { border-bottom-color: #1e293b; }
+        .file-name { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 500; color: #0f172a; }
+        .dark .file-name { color: #f1f5f9; }
+        .file-meta { display: flex; align-items: center; gap: 16px; }
+        .date-gray { font-size: 0.8rem; color: #64748b; direction: ltr; }
+        .dark .date-gray { color: #94a3b8; }
+        .delete-btn { background: none; border: none; cursor: pointer; font-size: 1rem; color: #ef4444; transition: all 0.2s; padding: 6px 10px; border-radius: 8px; }
+        .delete-btn:hover { background: rgba(239,68,68,0.1); transform: scale(1.05); }
+        .refresh-icon { transition: transform 0.3s ease; }
+        .refresh-icon:hover { transform: rotate(180deg); }
+        .stat-card { transition: all 0.2s ease; }
+        .stat-card:hover { transform: translateY(-3px); }
+        .clean-select { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.6rem 0.75rem; font-size: 0.875rem; color: #1e293b; outline: none; cursor: pointer; transition: all 0.2s; }
+        .clean-select:focus { border-color: #3b82f6; }
+        .dark .clean-select { background-color: #1e293b; border-color: #334155; color: #f1f5f9; }
+
+        #session-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(15,23,42,0.85);
+            backdrop-filter: blur(6px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #session-overlay.hidden { display: none; }
+        .session-card {
+            background: white; border-radius: 1rem; padding: 2rem;
+            text-align: center; max-width: 360px; width: 90%;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+        }
+        .dark .session-card { background: #1e293b; }
+
+        .student-id-box {
+            display: flex; align-items: center; gap: 10px;
+            background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+            border: 2px solid #7c3aed; border-radius: 0.75rem;
+            padding: 0.65rem 1rem;
+        }
+        .dark .student-id-box {
+            background: linear-gradient(135deg, #2e1065 0%, #3b0764 100%);
+            border-color: #7c3aed;
+        }
+        .student-id-value {
+            font-size: 1rem; font-weight: 700; letter-spacing: 0.06em;
+            color: #4c1d95; flex: 1;
+        }
+        .dark .student-id-value { color: #e9d5ff; }
+        .auto-badge {
+            font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; background: #7c3aed; color: white;
+            padding: 2px 7px; border-radius: 99px;
+        }
+        .warning-box {
+            display: flex; align-items: flex-start; gap: 8px;
+            background: #fffbeb; border: 1px solid #fcd34d;
+            border-radius: 0.625rem; padding: 0.75rem 1rem;
+        }
+        .dark .warning-box { background: #422006; border-color: #92400e; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 font-sans antialiased">
+
+    <!-- SESSION OVERLAY -->
+    <div id="session-overlay">
+        <div class="session-card">
+            <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-spinner fa-spin text-blue-600 dark:text-blue-400 text-2xl"></i>
+            </div>
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1">Checking session...</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Please wait</p>
+        </div>
+    </div>
+
+    <nav class="fixed top-0 left-0 right-0 z-[100] backdrop-blur-lg bg-white/85 dark:bg-slate-950/85 border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <a href="#" class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                    <i class="fa-solid fa-graduation-cap text-base"></i>
+                </div>
+                <span class="text-xl font-bold text-slate-900 dark:text-white">UniAdmin</span>
+            </a>
+            <div class="hidden md:flex items-center gap-1">
+                <button data-nav="dashboard" class="nav-btn active px-4 py-2 text-sm font-medium rounded-lg transition-all bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"><i class="fa-solid fa-chart-line mr-2"></i> Dashboard</button>
+                <button data-nav="timetable" class="nav-btn px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><i class="fa-solid fa-calendar-alt mr-2"></i> Timetable</button>
+                <button data-nav="students" class="nav-btn px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><i class="fa-solid fa-users mr-2"></i> Students</button>
+                <button data-nav="marks" class="nav-btn px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><i class="fa-solid fa-chart-simple mr-2"></i> Marks</button>
+                <button data-nav="certificates" class="nav-btn px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><i class="fa-solid fa-certificate mr-2"></i> Certificates</button>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="theme-toggle" class="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center">
+                    <i id="theme-icon" class="fa-solid fa-moon text-slate-500 dark:text-amber-400"></i>
+                </button>
+                <div class="h-5 w-px bg-slate-200 dark:bg-slate-800"></div>
+                <button id="logout-btn" class="px-5 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[12px] font-bold rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity whitespace-nowrap">LOG OUT</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+
+            <!-- DASHBOARD -->
+            <div id="dashboard-content" class="fade-in">
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+                    <p class="text-slate-500 dark:text-slate-400 mt-1">Upload and manage university files</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                    <!-- Upload Schedule -->
+                    <div class="upload-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center"><i class="fa-solid fa-calendar-alt text-lg"></i></div>
+                            <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Upload Schedule</h2><p class="text-xs text-slate-500 dark:text-slate-400">Excel files for class schedules</p></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Level</label><select id="planning-level" class="clean-select w-full"><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select></div>
+                                <div><label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Group</label><select id="planning-group" class="clean-select w-full"><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option><option value="G4">G4</option></select></div>
+                            </div>
+                            <div id="planning-dropzone" class="dropzone border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center cursor-pointer relative">
+                                <input type="file" accept=".xlsx,.xls" id="planning-file" class="absolute inset-0 opacity-0 cursor-pointer">
+                                <i class="fa-solid fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
+                                <p class="text-sm text-slate-500 dark:text-slate-400"><strong class="text-blue-600 dark:text-blue-400">Choose Excel file</strong><br>.xlsx or .xls only</p>
+                            </div>
+                            <div id="planning-file-info" class="hidden flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg"><i class="fa-solid fa-check-circle"></i><span id="planning-file-name"></span></div>
+                            <button id="planning-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-upload mr-2"></i> Upload Schedule</button>
+                            <div id="planning-progress" class="hidden"><div class="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden"><div id="planning-fill" class="h-full bg-blue-600 rounded-full transition-all" style="width:0%"></div></div><p id="planning-progress-text" class="text-xs text-slate-500 dark:text-slate-400 text-center mt-1">Uploading...</p></div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Grades -->
+                    <div class="upload-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"><i class="fa-solid fa-chart-line text-lg"></i></div>
+                            <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Upload Grades</h2><p class="text-xs text-slate-500 dark:text-slate-400">Excel files for student grades</p></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Level</label><select id="notes-level" onchange="updateNotesSemestre()" class="clean-select w-full"><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select></div>
+                                <div><label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Semestre</label><select id="notes-semestre" class="clean-select w-full"><option value="S1">S1</option><option value="S2">S2</option></select></div>
+                            </div>
+                            <div id="notes-dropzone" class="dropzone border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center cursor-pointer relative">
+                                <input type="file" accept=".xlsx,.xls" id="notes-file" class="absolute inset-0 opacity-0 cursor-pointer">
+                                <i class="fa-solid fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
+                                <p class="text-sm text-slate-500 dark:text-slate-400"><strong class="text-emerald-600 dark:text-emerald-400">Choose Excel file</strong><br>.xlsx or .xls only</p>
+                            </div>
+                            <div id="notes-file-info" class="hidden flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg"><i class="fa-solid fa-check-circle"></i><span id="notes-file-name"></span></div>
+                            <button id="notes-btn" disabled class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-upload mr-2"></i> Upload Grades</button>
+                            <div id="notes-progress" class="hidden"><div class="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden"><div id="notes-fill" class="h-full bg-emerald-600 rounded-full transition-all" style="width:0%"></div></div><p id="notes-progress-text" class="text-xs text-slate-500 dark:text-slate-400 text-center mt-1">Uploading...</p></div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Certificates -->
+                    <div class="upload-card bg-white dark:bg-slate-900 rounded-2xl border-2 border-purple-200 dark:border-purple-900 p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center"><i class="fa-solid fa-certificate text-lg"></i></div>
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900 dark:text-white">Upload Certificates</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Signed PDF → sent directly to student email</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                                    <i class="fa-solid fa-id-card mr-1"></i> Student ID
+                                </label>
+                                <div id="cert-id-found" class="hidden student-id-box">
+                                    <i class="fa-solid fa-circle-check text-purple-500 text-lg"></i>
+                                    <span id="cert-student-id-display" class="student-id-value">—</span>
+                                    <span class="auto-badge"><i class="fa-solid fa-link mr-1"></i>auto</span>
+                                </div>
+                                <div id="cert-id-missing" class="hidden warning-box">
+                                    <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+                                    <div>
+                                        <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">No student linked</p>
+                                        <p class="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Please open this page from the email link sent by n8n.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="certificates-dropzone" class="cert-dropzone dropzone border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-xl p-6 text-center cursor-pointer relative">
+                                <input type="file" accept=".pdf" id="certificates-file" class="absolute inset-0 opacity-0 cursor-pointer">
+                                <i class="fa-regular fa-file-pdf text-3xl text-purple-400 mb-2"></i>
+                                <p class="text-sm text-slate-500 dark:text-slate-400"><strong class="text-purple-600 dark:text-purple-400">Choose signed PDF</strong><br>.pdf only</p>
+                            </div>
+                            <div id="certificates-file-info" class="hidden flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
+                                <i class="fa-solid fa-check-circle"></i><span id="certificates-file-name"></span>
+                            </div>
+                            <button id="certificates-btn" disabled class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-paper-plane mr-2"></i> Send Certificate to Student
+                            </button>
+                            <div id="certificates-progress" class="hidden">
+                                <div class="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden"><div id="certificates-fill" class="h-full bg-purple-600 rounded-full transition-all" style="width:0%"></div></div>
+                                <p id="certificates-progress-text" class="text-xs text-slate-500 dark:text-slate-400 text-center mt-1">Uploading...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Students -->
+                    <div class="upload-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center"><i class="fa-solid fa-users text-lg"></i></div>
+                            <div><h2 class="text-lg font-bold text-slate-900 dark:text-white">Upload Students</h2><p class="text-xs text-slate-500 dark:text-slate-400">Excel → inséré directement dans la base de données</p></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Level</label>
+                                <select id="students-level" class="clean-select w-full">
+                                    <option value="L1">L1</option>
+                                    <option value="L2">L2</option>
+                                    <option value="L3">L3</option>
+                                </select>
+                            </div>
+                            <div class="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 flex-shrink-0 text-sm"></i>
+                                <p class="text-xs text-amber-700 dark:text-amber-400">Cet upload <strong>supprime et remplace</strong> tous les étudiants de ce niveau dans la base de données.</p>
+                            </div>
+                            <div id="students-dropzone" class="dropzone border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center cursor-pointer relative">
+                                <input type="file" accept=".xlsx,.xls" id="students-file" class="absolute inset-0 opacity-0 cursor-pointer">
+                                <i class="fa-solid fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
+                                <p class="text-sm text-slate-500 dark:text-slate-400"><strong class="text-amber-600 dark:text-amber-400">Choose Excel file</strong><br>.xlsx or .xls only</p>
+                            </div>
+                            <div id="students-file-info" class="hidden flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg"><i class="fa-solid fa-check-circle"></i><span id="students-file-name"></span></div>
+                            <button id="students-btn" disabled class="w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-database mr-2"></i> Importer les étudiants</button>
+                            <div id="students-progress" class="hidden"><div class="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden"><div id="students-fill" class="h-full bg-amber-600 rounded-full transition-all" style="width:0%"></div></div><p id="students-progress-text" class="text-xs text-slate-500 dark:text-slate-400 text-center mt-1">Traitement...</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIMETABLE -->
+            <div id="timetable-content" class="hidden fade-in">
+                <div class="mb-8"><h1 class="text-3xl font-bold text-slate-900 dark:text-white">Timetable</h1><p class="text-slate-500 dark:text-slate-400 mt-1">Manage class schedules and timetables</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><i class="fa-regular fa-copy text-blue-600 dark:text-blue-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="timetable-total">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Files</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><i class="fa-regular fa-clock text-purple-600 dark:text-purple-400 text-lg"></i></div><div><p class="text-xl font-bold text-slate-900 dark:text-white" id="timetable-last">—</p><p class="text-xs text-slate-500 dark:text-slate-400">Last Upload</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><i class="fa-solid fa-database text-emerald-600 dark:text-emerald-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="timetable-size">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Size</p></div></div></div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-8"><div class="flex flex-wrap items-center justify-between gap-4"><div class="flex items-center gap-3"><span class="text-sm font-medium text-slate-600 dark:text-slate-400"><i class="fa-solid fa-filter ml-1"></i> Filter:</span><select id="timetable-level-filter" class="clean-select"><option value="all">All Levels</option><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select><select id="timetable-group-filter" class="clean-select"><option value="all">All Groups</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option><option value="G4">G4</option></select></div><button id="timetable-refresh" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-rotate-right refresh-icon"></i> Refresh</button></div></div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800"><h2 class="font-semibold text-slate-900 dark:text-white"><i class="fa-regular fa-folder-open mr-2"></i> Uploaded Files</h2></div><div id="timetable-files-list" class="divide-y divide-slate-200 dark:divide-slate-800"><div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-regular fa-folder-open text-4xl mb-3 block"></i><p>No files found. Upload from Dashboard.</p></div></div></div>
+            </div>
+
+            <!-- STUDENTS -->
+            <div id="students-content" class="hidden fade-in">
+                <div class="mb-8"><h1 class="text-3xl font-bold text-slate-900 dark:text-white">Students</h1><p class="text-slate-500 dark:text-slate-400 mt-1">Manage student data files</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><i class="fa-regular fa-copy text-blue-600 dark:text-blue-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="students-total">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Files</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><i class="fa-regular fa-clock text-purple-600 dark:text-purple-400 text-lg"></i></div><div><p class="text-xl font-bold text-slate-900 dark:text-white" id="students-last">—</p><p class="text-xs text-slate-500 dark:text-slate-400">Last Upload</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><i class="fa-solid fa-database text-emerald-600 dark:text-emerald-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="students-size">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Size</p></div></div></div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-8"><div class="flex flex-wrap items-center justify-between gap-4"><div class="flex items-center gap-3"><span class="text-sm font-medium text-slate-600 dark:text-slate-400"><i class="fa-solid fa-filter ml-1"></i> Filter:</span><select id="students-level-filter" class="clean-select"><option value="all">All Levels</option><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select><select id="students-group-filter" class="clean-select"><option value="all">All Groups</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option><option value="G4">G4</option></select></div><button id="students-refresh" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-rotate-right refresh-icon"></i> Refresh</button></div></div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800"><h2 class="font-semibold text-slate-900 dark:text-white"><i class="fa-regular fa-folder-open mr-2"></i> Uploaded Files</h2></div><div id="students-files-list" class="divide-y divide-slate-200 dark:divide-slate-800"><div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-regular fa-folder-open text-4xl mb-3 block"></i><p>No files found. Upload from Dashboard.</p></div></div></div>
+            </div>
+
+            <!-- MARKS -->
+            <div id="marks-content" class="hidden fade-in">
+                <div class="mb-8"><h1 class="text-3xl font-bold text-slate-900 dark:text-white">Marks</h1><p class="text-slate-500 dark:text-slate-400 mt-1">Manage grades files</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><i class="fa-regular fa-copy text-blue-600 dark:text-blue-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="marks-total">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Files</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><i class="fa-regular fa-clock text-purple-600 dark:text-purple-400 text-lg"></i></div><div><p class="text-xl font-bold text-slate-900 dark:text-white" id="marks-last">—</p><p class="text-xs text-slate-500 dark:text-slate-400">Last Upload</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><i class="fa-solid fa-database text-emerald-600 dark:text-emerald-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="marks-size">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Size</p></div></div></div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-8"><div class="flex flex-wrap items-center justify-between gap-4"><div class="flex items-center gap-3"><span class="text-sm font-medium text-slate-600 dark:text-slate-400"><i class="fa-solid fa-filter ml-1"></i> Filter:</span><select id="marks-level-filter" class="clean-select"><option value="all">All Levels</option><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select><select id="marks-group-filter" class="clean-select"><option value="all">All Groups</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option><option value="G4">G4</option></select></div><button id="marks-refresh" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-rotate-right refresh-icon"></i> Refresh</button></div></div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800"><h2 class="font-semibold text-slate-900 dark:text-white"><i class="fa-regular fa-folder-open mr-2"></i> Uploaded Files</h2></div><div id="marks-files-list" class="divide-y divide-slate-200 dark:divide-slate-800"><div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-regular fa-folder-open text-4xl mb-3 block"></i><p>No files found. Upload from Dashboard.</p></div></div></div>
+            </div>
+
+            <!-- CERTIFICATES -->
+            <div id="certificates-content" class="hidden fade-in">
+                <div class="mb-8"><h1 class="text-3xl font-bold text-slate-900 dark:text-white">Certificates</h1><p class="text-slate-500 dark:text-slate-400 mt-1">Manage certificates files (PDF)</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><i class="fa-regular fa-copy text-blue-600 dark:text-blue-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="certificates-total">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Files</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><i class="fa-regular fa-clock text-purple-600 dark:text-purple-400 text-lg"></i></div><div><p class="text-xl font-bold text-slate-900 dark:text-white" id="certificates-last">—</p><p class="text-xs text-slate-500 dark:text-slate-400">Last Upload</p></div></div></div>
+                    <div class="stat-card bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><i class="fa-solid fa-database text-emerald-600 dark:text-emerald-400 text-lg"></i></div><div><p class="text-2xl font-bold text-slate-900 dark:text-white" id="certificates-size">0</p><p class="text-xs text-slate-500 dark:text-slate-400">Total Size</p></div></div></div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-8"><div class="flex flex-wrap items-center justify-between gap-4"><div class="flex items-center gap-3"><span class="text-sm font-medium text-slate-600 dark:text-slate-400"><i class="fa-solid fa-filter ml-1"></i> Filter:</span><select id="certificates-level-filter" class="clean-select"><option value="all">All Levels</option><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option></select><select id="certificates-group-filter" class="clean-select"><option value="all">All Groups</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option><option value="G4">G4</option></select></div><button id="certificates-refresh" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-rotate-right refresh-icon"></i> Refresh</button></div></div>
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800"><h2 class="font-semibold text-slate-900 dark:text-white"><i class="fa-regular fa-folder-open mr-2"></i> Uploaded Files</h2></div><div id="certificates-files-list" class="divide-y divide-slate-200 dark:divide-slate-800"><div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-regular fa-folder-open text-4xl mb-3 block"></i><p>No files found. Upload from Dashboard.</p></div></div></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toasts" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL      = 'https://zpkddqkqyjrfogjcjpwz.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_7kQXBCZVBKvxqTyqdLC-HA_3TteXaTd';
+        const N8N_CERT_WEBHOOK      = 'https://n8n-z4y4.onrender.com/webhook-test/certificat-signe';
+        const N8N_STUDENTS_WEBHOOK  = 'https://n8n-z4y4.onrender.com/webhook/upload-students'; // ← URL webhook n8n students
+
+        const BUCKET = {
+            planning:     'plannig',
+            notes:        'notes',
+            certificates: 'document'
+        };
+
+        const { createClient } = supabase;
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const urlStudentId = new URLSearchParams(window.location.search).get('student_id');
+
+        (function showStudentIdNow() {
+            const found   = document.getElementById('cert-id-found');
+            const missing = document.getElementById('cert-id-missing');
+            if (urlStudentId) {
+                document.getElementById('cert-student-id-display').textContent = urlStudentId;
+                found.classList.remove('hidden');
+            } else {
+                missing.classList.remove('hidden');
+            }
+        })();
+
+        (async () => {
+            const overlay = document.getElementById('session-overlay');
+            try {
+                const { data: { session } } = await sb.auth.getSession();
+                if (!session) { window.location.href = 'login.html'; return; }
+                overlay.classList.add('hidden');
+                initApp();
+            } catch (err) {
+                console.error('Session check failed:', err);
+                window.location.href = 'login.html';
+            }
+        })();
+
+        sb.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT' || !session) window.location.href = 'login.html';
+        });
+
+        function initApp() {
+            // Dark mode
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon   = document.getElementById('theme-icon');
+            if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                themeIcon.classList.replace('fa-moon','fa-sun');
+            }
+            themeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                themeIcon.classList.replace(isDark ? 'fa-moon':'fa-sun', isDark ? 'fa-sun':'fa-moon');
+            });
+
+            // Navigation
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const contents = {
+                dashboard:    document.getElementById('dashboard-content'),
+                timetable:    document.getElementById('timetable-content'),
+                students:     document.getElementById('students-content'),
+                marks:        document.getElementById('marks-content'),
+                certificates: document.getElementById('certificates-content')
+            };
+            function showContent(id) {
+                Object.values(contents).forEach(c => c && c.classList.add('hidden'));
+                if (!contents[id]) return;
+                contents[id].classList.remove('hidden');
+                if (id === 'timetable')         loadSectionFiles('timetable',    BUCKET.planning);
+                else if (id === 'marks')        loadSectionFiles('marks',        BUCKET.notes);
+                else if (id === 'certificates') loadSectionFiles('certificates', BUCKET.certificates);
+            }
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    navButtons.forEach(b => {
+                        b.classList.remove('active','bg-blue-50','dark:bg-blue-900/30','text-blue-600','dark:text-blue-400');
+                        b.classList.add('text-slate-600','dark:text-slate-400');
+                    });
+                    btn.classList.add('active','bg-blue-50','dark:bg-blue-900/30','text-blue-600','dark:text-blue-400');
+                    btn.classList.remove('text-slate-600','dark:text-slate-400');
+                    showContent(btn.getAttribute('data-nav'));
+                });
+            });
+
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', async () => {
+                if (confirm('Are you sure you want to log out?')) {
+                    await sb.auth.signOut();
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                }
+            });
+
+            // File inputs
+            document.getElementById('planning-btn').addEventListener('click', () => uploadFile('planning', BUCKET.planning));
+            document.getElementById('planning-file').addEventListener('change', () => handleFileSelect('planning'));
+            setupDragDrop('planning');
+
+            document.getElementById('notes-btn').addEventListener('click', () => uploadNotesFile());
+            document.getElementById('notes-file').addEventListener('change', () => handleFileSelect('notes'));
+            setupDragDrop('notes');
+
+            document.getElementById('certificates-btn').addEventListener('click', uploadCertificate);
+            document.getElementById('certificates-file').addEventListener('change', () => handleFileSelect('certificates'));
+            setupDragDrop('certificates');
+
+            document.getElementById('students-btn').addEventListener('click', uploadStudentsToN8N);
+            document.getElementById('students-file').addEventListener('change', () => handleFileSelect('students'));
+            setupDragDrop('students');
+
+            [
+                { name:'timetable',    bucket: BUCKET.planning     },
+                { name:'marks',        bucket: BUCKET.notes        },
+                { name:'certificates', bucket: BUCKET.certificates }
+            ].forEach(s => {
+                const r = document.getElementById(`${s.name}-refresh`);
+                const l = document.getElementById(`${s.name}-level-filter`);
+                const g = document.getElementById(`${s.name}-group-filter`);
+                if (r) r.addEventListener('click', () => loadSectionFiles(s.name, s.bucket));
+                if (l) l.addEventListener('change', () => renderSectionFiles(s.name));
+                if (g) g.addEventListener('change', () => renderSectionFiles(s.name));
+            });
+        }
+
+        // ── CERT BUTTON ENABLE ──
+        function checkCertBtn() {
+            const hasId   = !!urlStudentId;
+            const hasFile = !!document.getElementById('certificates-file').files[0];
+            document.getElementById('certificates-btn').disabled = !(hasId && hasFile);
+        }
+
+        // ── FILE SELECT & DRAG DROP ──
+        function handleFileSelect(type) {
+            const file = document.getElementById(`${type}-file`).files[0];
+            if (!file) return;
+            document.getElementById(`${type}-file-name`).textContent = file.name;
+            document.getElementById(`${type}-file-info`).style.display = 'flex';
+            if (type === 'certificates') checkCertBtn();
+            else document.getElementById(`${type}-btn`).disabled = false;
+        }
+
+        function setupDragDrop(type) {
+            const zone = document.getElementById(`${type}-dropzone`);
+            if (!zone) return;
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault(); zone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    document.getElementById(`${type}-file`).files = e.dataTransfer.files;
+                    handleFileSelect(type);
+                }
+            });
+        }
+
+        // ── STANDARD UPLOAD (planning only) ──
+        async function uploadFile(type, bucket) {
+            const file = document.getElementById(`${type}-file`).files[0];
+            if (!file) return;
+            const { data: { session } } = await sb.auth.getSession();
+            if (!session) { showToast('Session expired — please login again', 'error'); setTimeout(() => window.location.href = 'login.html', 1500); return; }
+
+            const level = document.getElementById('planning-level').value;
+            const group = document.getElementById('planning-group').value;
+
+            const btn = document.getElementById(`${type}-btn`);
+            const pd  = document.getElementById(`${type}-progress`);
+            const fl  = document.getElementById(`${type}-fill`);
+            const pt  = document.getElementById(`${type}-progress-text`);
+            btn.disabled = true; pd.style.display = 'block'; fl.style.width = '40%'; pt.textContent = 'Uploading...';
+
+            const ext      = file.name.split('.').pop();
+            const fileName = `${level}_${group}.${ext}`;
+
+            const { error } = await sb.storage.from(bucket).upload(fileName, file, {
+                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                upsert: true
+            });
+
+            if (error) {
+                fl.style.width = '100%'; pt.textContent = 'Error';
+                showToast('Upload error: ' + error.message, 'error');
+                btn.disabled = false;
+            } else {
+                fl.style.width = '100%'; pt.textContent = 'Completed!';
+                showToast(`${file.name} uploaded successfully ✅`, 'success');
+                setTimeout(() => resetUploadUI(type), 2000);
+            }
+        }
+
+        // ── UPLOAD STUDENTS Excel → n8n → DELETE level + INSERT ──
+        async function uploadStudentsToN8N() {
+            const file  = document.getElementById('students-file').files[0];
+            const level = document.getElementById('students-level').value;
+            if (!file) return;
+
+            const { data: { session } } = await sb.auth.getSession();
+            if (!session) { showToast('Session expirée', 'error'); return; }
+
+            const btn = document.getElementById('students-btn');
+            const pd  = document.getElementById('students-progress');
+            const fl  = document.getElementById('students-fill');
+            const pt  = document.getElementById('students-progress-text');
+
+            btn.disabled = true;
+            pd.style.display = 'block';
+            fl.style.width = '20%';
+            pt.textContent = 'Envoi vers n8n...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('level', level);
+
+                fl.style.width = '55%';
+                pt.textContent = 'Traitement en cours...';
+
+                const res = await fetch(N8N_STUDENTS_WEBHOOK, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await res.json();
+                if (!res.ok || !result.success) throw new Error(result.error || `Erreur: ${res.status}`);
+
+                fl.style.width = '100%';
+                pt.textContent = 'Terminé !';
+                showToast(`✅ ${result.total_inserted} étudiants ${level} insérés dans Supabase`, 'success');
+                setTimeout(() => resetUploadUI('students'), 2500);
+
+            } catch (err) {
+                fl.style.width = '100%';
+                pt.textContent = 'Erreur !';
+                showToast('Erreur: ' + err.message, 'error');
+                btn.disabled = false;
+            }
+        }
+
+        // ── UPLOAD NOTES → Supabase Storage ──
+        async function uploadNotesFile() {
+            const file = document.getElementById('notes-file').files[0];
+            if (!file) return;
+
+            const { data: { session } } = await sb.auth.getSession();
+            if (!session) {
+                showToast('Session expired — please login again', 'error');
+                setTimeout(() => window.location.href = 'login.html', 1500);
+                return;
+            }
+
+            const level    = document.getElementById('notes-level').value;
+            const semestre = document.getElementById('notes-semestre').value;
+
+            const btn = document.getElementById('notes-btn');
+            const pd  = document.getElementById('notes-progress');
+            const fl  = document.getElementById('notes-fill');
+            const pt  = document.getElementById('notes-progress-text');
+
+            btn.disabled = true;
+            pd.style.display = 'block';
+            fl.style.width = '40%';
+            pt.textContent = 'Uploading...';
+
+            const ext      = file.name.split('.').pop();
+            const fileName = `Notes_${level}_${semestre}.${ext}`;
+
+            const { error } = await sb.storage.from(BUCKET.notes).upload(fileName, file, {
+                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                upsert: true
+            });
+
+            if (error) {
+                fl.style.width = '100%';
+                pt.textContent = 'Error';
+                showToast('Upload error: ' + error.message, 'error');
+                btn.disabled = false;
+            } else {
+                fl.style.width = '100%';
+                pt.textContent = 'Completed!';
+                showToast(`${fileName} uploadé avec succès ✅`, 'success');
+                setTimeout(() => resetUploadUI('notes'), 2000);
+            }
+        }
+
+        // ── CERTIFICATE UPLOAD → n8n ──
+        async function uploadCertificate() {
+            if (!urlStudentId) { showToast('No student_id — open this page from the email link', 'error'); return; }
+            const file = document.getElementById('certificates-file').files[0];
+            if (!file) { showToast('Please choose a PDF file', 'error'); return; }
+
+            const { data: { session } } = await sb.auth.getSession();
+            if (!session) { showToast('Session expired — please login again', 'error'); setTimeout(() => window.location.href = 'login.html', 1500); return; }
+
+            const btn = document.getElementById('certificates-btn');
+            const pd  = document.getElementById('certificates-progress');
+            const fl  = document.getElementById('certificates-fill');
+            const pt  = document.getElementById('certificates-progress-text');
+
+            btn.disabled = true; pd.style.display = 'block'; fl.style.width = '20%'; pt.textContent = 'Preparing PDF...';
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const base64 = reader.result.split(',')[1];
+                    fl.style.width = '55%'; pt.textContent = 'Sending to student...';
+                    const res = await fetch(N8N_CERT_WEBHOOK, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ student_id: urlStudentId, pdf_base64: base64, file_name: file.name })
+                    });
+                    if (!res.ok) throw new Error(`n8n responded with ${res.status}`);
+                    fl.style.width = '100%'; pt.textContent = 'Sent ✅';
+                    showToast(`Certificate sent to student ${urlStudentId} ✅`, 'success');
+                    setTimeout(() => resetUploadUI('certificates'), 2500);
+                } catch (err) {
+                    fl.style.width = '100%'; pt.textContent = 'Error';
+                    showToast('Failed to send: ' + err.message, 'error');
+                    btn.disabled = false;
+                }
+            };
+            reader.onerror = () => { showToast('Failed to read PDF file', 'error'); btn.disabled = false; pd.style.display = 'none'; };
+            reader.readAsDataURL(file);
+        }
+
+        function resetUploadUI(type) {
+            document.getElementById(`${type}-progress`).style.display = 'none';
+            document.getElementById(`${type}-file-info`).style.display = 'none';
+            document.getElementById(`${type}-btn`).disabled = true;
+            document.getElementById(`${type}-file`).value = '';
+            document.getElementById(`${type}-fill`).style.width = '0%';
+        }
+
+        // ── SECTION FILES ──
+        let sectionFilesCache = { timetable:[], marks:[], certificates:[] };
+
+        async function loadSectionFiles(section, bucket) {
+            const container = document.getElementById(`${section}-files-list`);
+            if (!container) return;
+            container.innerHTML = '<div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-3 block"></i><p>Loading...</p></div>';
+            try {
+                const { data: files, error } = await sb.storage.from(bucket).list();
+                if (error) throw error;
+                const result = [];
+                for (const f of files || []) {
+                    if (f.name.startsWith('.') || f.name === '.emptyFolderPlaceholder') continue;
+                    result.push({
+                        name: f.name,
+                        uploaded_at: f.updated_at,
+                        size: f.metadata?.size || 0,
+                        storage_name: f.name
+                    });
+                }
+                sectionFilesCache[section] = result;
+                renderSectionFiles(section);
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="p-8 text-center text-red-500 dark:text-red-400"><i class="fa-solid fa-circle-exclamation text-2xl mb-3 block"></i><p>Error loading files: ' + escapeHtml(err.message) + '</p></div>';
+            }
+        }
+
+        function renderSectionFiles(section) {
+            const container = document.getElementById(`${section}-files-list`);
+            const lf = document.getElementById(`${section}-level-filter`)?.value || 'all';
+            const gf = document.getElementById(`${section}-group-filter`)?.value || 'all';
+            let filtered = [...(sectionFilesCache[section] || [])];
+
+            // Filter by level/group based on filename pattern
+            if (lf !== 'all') filtered = filtered.filter(f => f.name.includes(lf));
+            if (gf !== 'all') filtered = filtered.filter(f => f.name.includes(gf));
+            filtered.sort((a,b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+
+            const te = document.getElementById(`${section}-total`);
+            const le = document.getElementById(`${section}-last`);
+            const se = document.getElementById(`${section}-size`);
+            if (te) te.textContent = filtered.length;
+            if (le) le.textContent = filtered.length > 0 ? (filtered[0].name.length > 20 ? filtered[0].name.substring(0,20)+'...' : filtered[0].name) : '—';
+            if (se) se.textContent = (filtered.reduce((s,f) => s + (f.size||0), 0) / 1024).toFixed(1) + ' KB';
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="p-8 text-center text-slate-500 dark:text-slate-400"><i class="fa-regular fa-folder-open text-4xl mb-3 block"></i><p>No files match the filter</p></div>';
+                return;
+            }
+            const icon = section === 'certificates'
+                ? 'fa-regular fa-file-pdf text-red-600 dark:text-red-500'
+                : 'fa-regular fa-file-excel text-green-600 dark:text-green-500';
+            container.innerHTML = filtered.map(f => `
+                <div class="file-row px-6">
+                    <div class="file-name"><i class="${icon}"></i><span>${escapeHtml(f.name)}</span></div>
+                    <div class="file-meta">
+                        <span class="date-gray"><i class="fa-regular fa-calendar ml-1"></i> ${formatDate(f.uploaded_at)}</span>
+                        <button class="delete-btn" onclick="deleteSectionFile('${section}','${f.storage_name}')"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>`).join('');
+        }
+
+        async function deleteSectionFile(section, storageName) {
+            const bucketMap = {
+                timetable:    BUCKET.planning,
+                marks:        BUCKET.notes,
+                certificates: BUCKET.certificates
+            };
+            const b = bucketMap[section];
+            if (!b || !confirm('Are you sure you want to delete this file?')) return;
+            try {
+                await sb.storage.from(b).remove([storageName]);
+                showToast('File deleted successfully', 'success');
+                await loadSectionFiles(section, b);
+            } catch {
+                showToast('Error deleting file', 'error');
+            }
+        }
+
+        function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-CA') : 'Unknown'; }
+        function escapeHtml(s) { return (s||'').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+        function showToast(msg, type) {
+            const t = document.createElement('div');
+            t.className = `toast ${type === 'success'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+            } p-3 rounded-lg shadow-lg flex items-center gap-2 text-sm`;
+            t.innerHTML = `<i class="fa-solid fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
+            document.getElementById('toasts').appendChild(t);
+            setTimeout(() => t.remove(), 4000);
+        }
+
+        function updateNotesSemestre() {
+            const level = document.getElementById('notes-level').value;
+            const sel   = document.getElementById('notes-semestre');
+            const map   = { L1: ['S1','S2'], L2: ['S3','S4'], L3: ['S5','S6'] };
+            const opts  = map[level] || ['S1','S2'];
+            sel.innerHTML = opts.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        window.updateNotesSemestre = updateNotesSemestre;
+        window.deleteSectionFile   = deleteSectionFile;
+    </script>
+</body>
+</html>
